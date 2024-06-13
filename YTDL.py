@@ -1,20 +1,21 @@
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 from pytube import YouTube
-from pathvalidate import sanitize_filename
-from PIL import Image
+from PIL import Image, ImageDraw, ImageOps
 import win32clipboard as cb
 import customtkinter as ctk
 import urllib.request
 import io
 import asyncio
-import subprocess
 import ctypes
 import re
 import time
 import threading
 import sys
+import os
+import subprocess
 
 ctk.set_appearance_mode("system")
+ctk.set_default_color_theme("./red_theme.json")
 
 
 class WebImage:
@@ -23,6 +24,7 @@ class WebImage:
             raw_data = u.read()
         image = Image.open(io.BytesIO(raw_data))
         size = self.resize_to_max_percentage(image.width, image.height)
+        image = self.round_corners(image, size)
         self.image = ctk.CTkImage(image, size=size)
 
     def get(self):
@@ -42,6 +44,20 @@ class WebImage:
 
         return int(new_width), int(new_height)
 
+    @staticmethod
+    def round_corners(image, size, radius=20):
+        image = image.resize(size, Image.LANCZOS)
+
+        mask = Image.new("L", size, 0)
+        draw = ImageDraw.Draw(mask)
+
+        draw.rounded_rectangle((0, 0) + size, radius=radius, fill=255)
+
+        rounded_image = ImageOps.fit(image, mask.size, centering=(0.5, 0.5))
+        rounded_image.putalpha(mask)
+
+        return rounded_image
+
 
 class YouTubeDownloaderApp:
     def __init__(self):
@@ -52,9 +68,11 @@ class YouTubeDownloaderApp:
         self.last_time = None
         self.window_width = 660
         self.window_height = 500
+        self.download_directory = os.path.expanduser("~")
 
         self.root = ctk.CTk()
         self.root.title("YouTube Video Downloader")
+        self.root.iconbitmap("./icon.ico")
         self.root.minsize(width=self.window_width, height=self.window_height)
         self.root.geometry(f"{self.window_width}x{self.window_height}")
 
@@ -65,7 +83,7 @@ class YouTubeDownloaderApp:
         self.frame_begin.pack(pady=20, padx=60, fill="both", expand=True)
 
         main_label = ctk.CTkLabel(
-            master=self.frame_begin, text="YouTube Downloader", font=("Roboto", 24)
+            master=self.frame_begin, text="YTDL by Dimokat", font=("Roboto", 24)
         )
         main_label.pack(pady=12, padx=10)
 
@@ -112,7 +130,7 @@ class YouTubeDownloaderApp:
         self.resolution_options_menu.pack(pady=12, padx=10)
 
         download_button = ctk.CTkButton(
-            self.frame_video_options, text="Download", command=self.start_download
+            self.frame_video_options, text="Download", command=self.open_download_dialog
         )
         download_button.pack(pady=12, padx=10)
 
@@ -267,8 +285,10 @@ class YouTubeDownloaderApp:
         try:
             video_stream = self.sizes[resolution][1]
             if video_stream:
-                filename = sanitize_filename(f"{self.yt.title}.mp4")
-                path = video_stream.download(output_path="", filename=filename)
+                filename = video_stream.default_filename
+                path = os.path.join(self.download_directory, filename)
+                path = os.path.normpath(path)
+                video_stream.download(output_path=self.download_directory)
                 if sys.platform == "win32":
                     subprocess.Popen(f'explorer /select,"{path}"')
                 self.return_to_main_state()
@@ -291,6 +311,11 @@ class YouTubeDownloaderApp:
             target=self.download_video, daemon=True, args=(None, res)
         )
         self.download_process.start()
+
+    def open_download_dialog(self):
+        self.download_directory = filedialog.askdirectory()
+        if self.download_directory:
+            self.start_download()
 
     def cancel_download(self):
         self.raise_exception_in_thread(self.download_process.ident, SystemExit)
@@ -316,6 +341,7 @@ class YouTubeDownloaderApp:
             self.frame_video_download.pack_forget()
         self.frame_begin.pack(pady=20, padx=60, fill="both", expand=True)
 
+        self.link_entry.delete(0, ctk.END)
         self.start_time = None
         self.last_time = None
         self.yt = None
