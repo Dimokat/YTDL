@@ -14,8 +14,19 @@ import sys
 import os
 import subprocess
 
+
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+
 ctk.set_appearance_mode("system")
-ctk.set_default_color_theme("./red_theme.json")
+ctk.set_default_color_theme(resource_path("./red_theme.json"))
 
 
 class WebImage:
@@ -72,7 +83,7 @@ class YouTubeDownloaderApp:
 
         self.root = ctk.CTk()
         self.root.title("YouTube Video Downloader")
-        self.root.iconbitmap("./icon.ico")
+        self.root.iconbitmap(resource_path("./icon.ico"))
         self.root.minsize(width=self.window_width, height=self.window_height)
         self.root.geometry(f"{self.window_width}x{self.window_height}")
 
